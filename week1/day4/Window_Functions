@@ -1,0 +1,368 @@
+CREATE TABLE employees (
+    employee_id INT PRIMARY KEY,
+    employee_name VARCHAR(100),
+    department VARCHAR(50),
+    salary INT,
+    hire_date DATE
+);
+
+CREATE TABLE orders (
+    order_id INT PRIMARY KEY,
+    customer_id INT,
+    employee_id INT,
+    order_date DATE,
+    total_amount DECIMAL(10,2)
+);
+
+INSERT INTO employees VALUES
+(1, 'Alice Johnson', 'Sales', 70000, '2020-01-15'),
+(2, 'Bob Smith', 'Sales', 65000, '2021-03-20'),
+(3, 'Charlie Brown', 'IT', 90000, '2019-07-01'),
+(4, 'Diana Prince', 'IT', 95000, '2018-11-11');
+
+INSERT INTO orders VALUES
+(101, 1, 1, '2024-01-10', 500),
+(102, 2, 2, '2024-01-11', 700),
+(103, 1, 1, '2024-01-15', 1200),
+(104, 3, 3, '2024-01-18', 300);
+
+SELECT employee_name,
+       salary,
+       ROW_NUMBER() OVER(ORDER BY salary DESC) AS row_num
+FROM employees;
+
+SELECT employee_name,
+       salary,
+       RANK() OVER(ORDER BY salary DESC) AS rank_num
+FROM employees;
+
+SELECT employee_name,
+       salary,
+       DENSE_RANK() OVER(ORDER BY salary DESC) AS dense_rank_num
+FROM employees;
+
+WITH ranked_employees AS (
+    SELECT employee_name,
+           salary,
+           ROW_NUMBER() OVER(ORDER BY salary DESC) AS rn
+    FROM employees
+)
+SELECT *
+FROM ranked_employees
+WHERE rn <= 3;
+
+
+SELECT employee_name,
+       department,
+       salary,
+       RANK() OVER(
+           PARTITION BY department
+           ORDER BY salary DESC
+       ) AS dept_rank
+FROM employees;
+
+SELECT employee_name,
+       department,
+       salary,
+       MAX(salary) OVER(PARTITION BY department) AS max_salary
+FROM employees;
+
+SELECT order_id,
+       order_date,
+       total_amount,
+       SUM(total_amount) OVER(
+           ORDER BY order_date
+       ) AS running_total
+FROM orders;
+
+SELECT employee_id,
+       order_date,
+       total_amount,
+       SUM(total_amount) OVER(
+           PARTITION BY employee_id
+           ORDER BY order_date
+       ) AS cumulative_sales
+FROM orders;
+
+SELECT customer_id,
+       order_date,
+       total_amount,
+       LAG(total_amount) OVER(
+           PARTITION BY customer_id
+           ORDER BY order_date
+       ) AS previous_order
+FROM orders;
+
+SELECT customer_id,
+       order_date,
+       total_amount,
+       LEAD(total_amount) OVER(
+           PARTITION BY customer_id
+           ORDER BY order_date
+       ) AS next_order
+FROM orders;
+
+SELECT customer_id,
+       order_date,
+       total_amount,
+       total_amount -
+       LAG(total_amount) OVER(
+           PARTITION BY customer_id
+           ORDER BY order_date
+       ) AS difference_amount
+FROM orders;
+
+SELECT order_id,
+       order_date,
+       total_amount,
+       AVG(total_amount) OVER(
+           ORDER BY order_date
+           ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+       ) AS moving_avg
+FROM orders;
+
+SELECT employee_name,
+       salary,
+       NTILE(4) OVER(ORDER BY salary DESC) AS quartile
+FROM employees;
+
+WITH first_orders AS (
+    SELECT *,
+           ROW_NUMBER() OVER(
+               PARTITION BY customer_id
+               ORDER BY order_date
+           ) AS rn
+    FROM orders
+)
+SELECT *
+FROM first_orders
+WHERE rn = 1;
+
+WITH latest_orders AS (
+    SELECT *,
+           ROW_NUMBER() OVER(
+               PARTITION BY customer_id
+               ORDER BY order_date DESC
+           ) AS rn
+    FROM orders
+)
+SELECT *
+FROM latest_orders
+WHERE rn = 1;
+
+SELECT employee_name,
+       department,
+       salary,
+       AVG(salary) OVER(
+           PARTITION BY department
+       ) AS dept_avg_salary
+FROM employees;
+
+WITH dept_avg AS (
+    SELECT employee_name,
+           department,
+           salary,
+           AVG(salary) OVER(
+               PARTITION BY department
+           ) AS avg_salary
+    FROM employees
+)
+SELECT *
+FROM dept_avg
+WHERE salary > avg_salary;
+
+SELECT employee_name,
+       department,
+       salary,
+       SUM(salary) OVER(
+           PARTITION BY department
+       ) AS department_payroll
+FROM employees;
+
+SELECT employee_name,
+       department,
+       salary,
+       ROUND(
+           salary * 100.0 /
+           SUM(salary) OVER(PARTITION BY department),
+           2
+       ) AS contribution_percent
+FROM employees;
+
+SELECT employee_name,
+       department,
+       COUNT(*) OVER() AS total_employees
+FROM employees;
+
+WITH employee_sales AS (
+    SELECT employee_id,
+           SUM(total_amount) AS total_sales
+    FROM orders
+    GROUP BY employee_id
+)
+SELECT *
+FROM employee_sales;
+
+
+
+WITH employee_sales AS (
+    SELECT employee_id,
+           SUM(total_amount) AS total_sales
+    FROM orders
+    GROUP BY employee_id
+),
+company_avg AS (
+    SELECT AVG(total_sales) AS avg_sales
+    FROM employee_sales
+)
+SELECT es.*
+FROM employee_sales es,
+     company_avg ca
+WHERE es.total_sales > ca.avg_sales;
+
+
+
+WITH customer_spending AS (
+    SELECT customer_id,
+           SUM(total_amount) AS total_spent
+    FROM orders
+    GROUP BY customer_id
+),
+customer_rankings AS (
+    SELECT *,
+           RANK() OVER(
+               ORDER BY total_spent DESC
+           ) AS spending_rank
+    FROM customer_spending
+)
+SELECT *
+FROM customer_rankings;
+
+
+
+WITH RECURSIVE numbers AS (
+    SELECT 1 AS n
+    UNION ALL
+    SELECT n + 1
+    FROM numbers
+    WHERE n < 10
+)
+SELECT *
+FROM numbers;
+
+
+WITH RECURSIVE employee_hierarchy AS (
+    SELECT employee_id,
+           employee_name,
+           department
+    FROM employees
+)
+SELECT *
+FROM employee_hierarchy;
+
+
+
+WITH avg_orders AS (
+    SELECT AVG(total_amount) AS avg_amount
+    FROM orders
+)
+SELECT *
+FROM orders
+WHERE total_amount >
+(
+    SELECT avg_amount
+    FROM avg_orders
+);
+
+
+
+WITH customer_totals AS (
+    SELECT customer_id,
+           SUM(total_amount) AS total_spent
+    FROM orders
+    GROUP BY customer_id
+)
+SELECT *,
+       RANK() OVER(
+           ORDER BY total_spent DESC
+       ) AS customer_rank
+FROM customer_totals;
+
+
+
+WITH ranked_salaries AS (
+    SELECT employee_name,
+           department,
+           salary,
+           DENSE_RANK() OVER(
+               PARTITION BY department
+               ORDER BY salary DESC
+           ) AS salary_rank
+    FROM employees
+)
+SELECT *
+FROM ranked_salaries
+WHERE salary_rank = 2;
+
+
+
+SELECT employee_name,
+       department,
+       salary,
+       MAX(salary) OVER(
+           PARTITION BY department
+       ) - salary AS salary_difference
+FROM employees;
+
+
+
+WITH employee_sales AS (
+    SELECT e.employee_id,
+           e.employee_name,
+           e.department,
+           SUM(o.total_amount) AS total_sales
+    FROM employees e
+    JOIN orders o
+    ON e.employee_id = o.employee_id
+    GROUP BY e.employee_id,
+             e.employee_name,
+             e.department
+),
+ranked_employees AS (
+    SELECT *,
+           RANK() OVER(
+               PARTITION BY department
+               ORDER BY total_sales DESC
+           ) AS sales_rank
+    FROM employee_sales
+)
+SELECT *
+FROM ranked_employees
+WHERE sales_rank = 1;
+
+
+
+WITH monthly_sales AS (
+    SELECT DATE_FORMAT(order_date, '%Y-%m') AS sales_month,
+           SUM(total_amount) AS monthly_total
+    FROM orders
+    GROUP BY DATE_FORMAT(order_date, '%Y-%m')
+),
+sales_trends AS (
+    SELECT sales_month,
+           monthly_total,
+           SUM(monthly_total) OVER(
+               ORDER BY sales_month
+           ) AS running_total,
+           LAG(monthly_total) OVER(
+               ORDER BY sales_month
+           ) AS previous_month_sales
+    FROM monthly_sales
+)
+SELECT *,
+       ROUND(
+           ((monthly_total - previous_month_sales)
+           / previous_month_sales) * 100,
+           2
+       ) AS percentage_growth
+FROM sales_trends;
